@@ -15,7 +15,7 @@ void FeatureExtractor::init()
 
 }
 
-void FeatureExtractor::exec(unsigned int target_n_vertices)
+void FeatureExtractor::exec()
 {
 
 }

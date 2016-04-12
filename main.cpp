@@ -3,15 +3,18 @@
 #include "ArcballWindow.h"
 #include "FeatureExtractor.h"
 #include "Curvature.h"
+#include "MeshRender.h"
 
 using namespace OpenGP;
 
+bool renderSmooth = true;
 struct MainWindow : public ArcballWindow{
     SurfaceMesh mesh;
 	FeatureExtractor extractor = FeatureExtractor(mesh);
-    SurfaceMeshRenderFlat renderer = SurfaceMeshRenderFlat(mesh);
+    MeshRender renderer = MeshRender(mesh);
+	SurfaceMeshRenderFlat flatRender = SurfaceMeshRenderFlat(mesh);
  
-    MainWindow(int argc, char** argv) : ArcballWindow(__FILE__,400,400){
+    MainWindow(int argc, char** argv) : ArcballWindow(__FILE__,600,600){
         if(argc!=2) mFatal("application requires one parameter! e.g. sphere.obj");
         bool success = mesh.read(argv[1]);
         if(!success) mFatal() << "File not found: " << argv[1];
@@ -23,10 +26,24 @@ struct MainWindow : public ArcballWindow{
     void key_callback(int key, int scancode, int action, int mods) override{
         ArcballWindow::key_callback(key, scancode, action, mods);
         if(key==GLFW_KEY_SPACE && action==GLFW_RELEASE){
-            extractor.exec( .9*mesh.n_vertices() );
+            extractor.exec();
             mesh.update_face_normals();
             renderer.init_data();
+			flatRender.init_data();
         }
+		if (key == GLFW_KEY_S && action == GLFW_RELEASE){
+		//	renderer.setSmooth();
+			this->scene.objects.clear();
+			renderSmooth = !renderSmooth;
+			if (renderSmooth)
+			{
+				this->scene.add(renderer);
+			}
+			else
+			{
+				this->scene.add(flatRender);
+			}
+		}
     }
 };
 

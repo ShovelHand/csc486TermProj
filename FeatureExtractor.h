@@ -38,7 +38,7 @@ public:
 /// @{ algorithm implementation
 public:
     void init();
-    void exec(unsigned int target_n_vertices);
+    void exec();
 private:
 
 /// @}
