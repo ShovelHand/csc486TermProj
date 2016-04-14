@@ -23,7 +23,6 @@ namespace OpenGP {
 
 		std::vector<GLuint> minVerticesBuffers;
 		std::vector<VertexArrayObject> maxVerticesBuffers;
-		std::vector<Vec3> someVectors;
 
 		bool renderSmooth = false;
 
@@ -143,10 +142,7 @@ colour = fColour;
 			normalbuffer.upload(n_tri);
 			barycbuffer.upload(b_tri);
 
-			for (int i = 0; i < 300; i++)
-			{
-				someVectors.push_back(Vec3(i, 0, 0));
-			}
+		
 		
 			
 		}
@@ -156,7 +152,7 @@ colour = fColour;
 		void display(){
 			program.bind();
 			vao.bind();
-			Vec3 Colour(1, 0, 0);
+			Vec3 Colour(0, 1, 0);
 			program.set_attribute("fColour", Colour);
 			glDrawArrays(GL_TRIANGLES, 0, mesh.n_faces() * 3 /*#verts*/);
 		
@@ -164,13 +160,7 @@ colour = fColour;
 			//render min features
 			Colour = Vec3(0, 0, 1);
 			program.set_attribute("fColour", Colour);
-			for (int i = 0; i < someVectors.size(); ++i)
-			{
-			//	glBindBuffer(GL_ARRAY_BUFFER, (minVerticesBuffers[i]));
-				glPointSize(5.0f);
-				glDrawArrays(GL_POINTS, 0, GLsizei(someVectors.size()));
-				glPointSize(1.0f);
-			}
+		
 			vao.release();
 			program.release();
 		}
