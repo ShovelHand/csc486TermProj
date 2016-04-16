@@ -22,7 +22,9 @@ private:
 	void visualize_k1_curvature();
 	void visualize_k2_curvature();
 
-	void ComputeCurvatures();
+//	void ComputeCurvatures();
+	void ComputeShapeOperators();
+	void ComputeMaxMinCurvatures();
 	void BuildExtremeCoeffs();
 	
 	SurfaceMesh& mesh;
@@ -31,13 +33,18 @@ private:
 	const float min_cos = std::cos(0.25*M_PI); ///< min angle (avoid face foldover)
 
 	//OpenGP::SurfaceMesh::Vertex_property<OpenGP::Point> vpoint;
-	//OpenGP::SurfaceMesh::Vertex_property<float> vquality;
+	OpenGP::SurfaceMesh::Vertex_property<float> vquality;
 	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> varea;
 	OpenGP::SurfaceMesh::Edge_property<OpenGP::Scalar> ecotan;
 	
 	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> vcurvature_K;
 	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> vcurvature_H;
-	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> vcurvature_k1;
-	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> vcurvature_k2;
+	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Vec3> vcurvature_kmax;
+	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Vec3> vcurvature_kmin;
+	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> vcurvature_principal;
+	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Mat3x3> vShapeOperator;
+
+	OpenGP::SurfaceMesh::Halfedge_property<OpenGP::Vec3> hface_norm;
+	OpenGP::SurfaceMesh::Edge_property<OpenGP::Mat3x3> eShapeOperator;
 
 };
