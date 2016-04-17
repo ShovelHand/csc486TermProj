@@ -21,10 +21,7 @@ struct MainWindow : public ArcballWindow{
         if(argc!=2) mFatal("application requires one parameter! e.g. sphere.obj");
         bool success = mesh.read(argv[1]);
         if(!success) mFatal() << "File not found: " << argv[1];
-		printf("Press 0 to render no curvatures\n");
-		printf("Press 1 to see K1 curvatures\n");
-		printf("Press 2 to see K2 curvatures\n");
-		printf("Press 3 to see principal curvatures\n");
+	
         mesh.update_face_normals(); ///< shading
         this->scene.add(renderer);
         extractor.init();
@@ -73,11 +70,11 @@ struct MainWindow : public ArcballWindow{
 			}*/
 			
 		}
-		if (key == GLFW_KEY_2)
+		if (key == GLFW_KEY_2 && action == GLFW_RELEASE)
 		{//SHOW K2 CURVATURES
 			renderer.renderCurvature(2);
 		}
-		if (key == GLFW_KEY_3)
+		if (key == GLFW_KEY_3 && action == GLFW_RELEASE)
 		{//SHOW PRINCIPAL CURVATURES
 			renderer.renderCurvature(3);
 		}

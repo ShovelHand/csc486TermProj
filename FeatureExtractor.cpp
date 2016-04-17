@@ -12,8 +12,10 @@ FeatureExtractor::FeatureExtractor(SurfaceMesh& mesh) : mesh(mesh)
 	vquality = mesh.vertex_property<float>("v:quality");
 	vcurvature_K = mesh.add_vertex_property<OpenGP::Scalar>("v:curvature_K");
 	vcurvature_H = mesh.add_vertex_property<OpenGP::Scalar>("v:curvature_H");
-	vcurvature_kmax = mesh.add_vertex_property<OpenGP::Vec3>("v:curvature_kmax");
-	vcurvature_kmin = mesh.add_vertex_property<OpenGP::Vec3>("v:curvature_kmin");
+	vdirection_kmax = mesh.add_vertex_property<OpenGP::Vec3>("v:direction_kmax");
+	vdirection_kmin = mesh.add_vertex_property<OpenGP::Vec3>("v:direction_kmin");
+	vcurvature_kmax = mesh.add_vertex_property<OpenGP::Scalar>("v:curvature_kmax");
+	vcurvature_kmin = mesh.add_vertex_property<OpenGP::Scalar>("v:curvature_kmin");
 	vcurvature_principal = mesh.add_vertex_property<OpenGP::Scalar>("v:curvature_principal");
 	vShapeOperator = mesh.add_vertex_property<OpenGP::Mat3x3>("v:shape_operator");
 	//edge properties
@@ -265,14 +267,53 @@ They are K_max and K_min, the discrete principal curvatures
 Corresponding unit lenght eigenvectors are the principal directions*/
 void FeatureExtractor::ComputeMaxMinCurvatures()
 {
-	//TODO:: code goes here
+
+	SurfaceMesh::Vertex_property<Vec3> vk_minDir = mesh.get_vertex_property<Vec3>("v:direction_kmin");
+	SurfaceMesh::Vertex_property<Vec3> vk_maxDir = mesh.get_vertex_property<Vec3>("v:direction_kmax");
+	SurfaceMesh::Vertex_property<Scalar> vk_min = mesh.get_vertex_property<Scalar>("v:curvature_kmin");
+	SurfaceMesh::Vertex_property<Scalar> vk_max = mesh.get_vertex_property<Scalar>("v:curvature_kmax");
+	SurfaceMesh::Vertex_property<Mat3x3> vShapeOp = mesh.get_vertex_property<Mat3x3>("v:shape_operator");
+
+	//We'll need to solve eigenvalues/vectors for each vertice's shape operator
+	for (const auto& vertex : mesh.vertices())
+	{
+		
+		Eigen::EigenSolver<Eigen::Matrix3f> es(vShapeOp[vertex]);//thank goodness for this, now let's get our two largest absolute values
+		float k_max, k_min;
+		Vec3 k_maxDir, k_minDir;
+
+		std::vector<std::pair<float, Vec3> > eigenPairs;
+		std::pair<float, Vec3> eigenValVec;
+		eigenValVec.first = es.eigenvalues()(0, 0).real(); eigenValVec.second = es.eigenvectors().col(0).real();
+		eigenPairs.push_back(eigenValVec);
+	
+		//if (es.eigenvalues()(0, 0).real() < es.eigenvalues()(1, 0).real() && es.eigenvalues()(0, 0).real() < es.eigenvalues()(2, 0).real())
+		//{//eigen value 1 is min
+		//	
+		//}
+		//else if (es.eigenvalues()(1, 0).real() < es.eigenvalues()(0, 0).real() && es.eigenvalues()(1, 0).real() < es.eigenvalues()(2, 0).real())
+		//{//eigen 2 is min
+		//	
+		//}
+		//else
+		//{//eigen 3 is min
+		//	
+		//}
+
+		vk_min[vertex] = k_min;
+		vk_max[vertex] = k_max;
+		vk_minDir[vertex] = k_minDir;
+		vk_maxDir[vertex] = k_maxDir;	
+	}
 	//We'll also scale the curvatures here "in order to obtain piecewise linear functions"
 }
 
-/*deremine extremality coefficients e_i*/
-void FeatureExtractor::BuildExtremeCoeffs()
+/*deremine build piecewise linear functions by triangle*/
+void FeatureExtractor::BuildLinearFunctions()
 {
 	//TODO:
+	//remember to have good choices for sign of k_i vectors
+	//discard singular triangles (May do this when rest of project is done)
 }
 
 /// Initialization
@@ -284,7 +325,7 @@ void FeatureExtractor::init()
 	//get 3X3 tensor matrices for each vertices
 	ComputeShapeOperators();
 	//get min and max curvatures from the tensor matrix shape operators
-	ComputeMaxMinCurvatures();
+//	ComputeMaxMinCurvatures();
 }
 
 void FeatureExtractor::exec()

@@ -25,7 +25,7 @@ private:
 //	void ComputeCurvatures();
 	void ComputeShapeOperators();
 	void ComputeMaxMinCurvatures();
-	void BuildExtremeCoeffs();
+	void BuildLinearFunctions();
 	
 	SurfaceMesh& mesh;
 	SurfaceMesh::Vertex_property<Vec3> vpoints;
@@ -39,8 +39,10 @@ private:
 	
 	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> vcurvature_K;
 	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> vcurvature_H;
-	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Vec3> vcurvature_kmax;
-	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Vec3> vcurvature_kmin;
+	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Vec3> vdirection_kmax;
+	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Vec3> vdirection_kmin;
+	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> vcurvature_kmax;
+	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> vcurvature_kmin;
 	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> vcurvature_principal;
 	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Mat3x3> vShapeOperator;
 
