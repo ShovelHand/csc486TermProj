@@ -18,6 +18,7 @@ FeatureExtractor::FeatureExtractor(SurfaceMesh& mesh) : mesh(mesh)
 	vcurvature_kmin = mesh.add_vertex_property<OpenGP::Scalar>("v:curvature_kmin");
 	vcurvature_principal = mesh.add_vertex_property<OpenGP::Scalar>("v:curvature_principal");
 	vShapeOperator = mesh.add_vertex_property<OpenGP::Mat3x3>("v:shape_operator");
+	vextremality = mesh.add_vertex_property<OpenGP::Scalar>("v:extremality");
 	//edge properties
 	ecotan = mesh.add_edge_property<OpenGP::Scalar>("e:cotan");
 	eShapeOperator = mesh.add_edge_property<OpenGP::Mat3x3>("e:shape_operator");
@@ -178,11 +179,31 @@ void FeatureExtractor::ComputeShapeOperators()
 {
 	//give every halfedge the norm of its corresponding face to compute dihedral angles for edge shape operators
 	SurfaceMesh::Halfedge_around_face_circulator hfc, hfc_end;
+	
+	//compute voronoi area for each vertex and norm of each halfedge's corresponding face for dihedral angle calculation later.
 	for (const auto& face : mesh.faces())
 	{
 		//initialize iterators
 		hfc = mesh.halfedges(face);
 		hfc_end = hfc;
+		
+		Scalar a;
+		SurfaceMesh::Vertex v0, v1, v2;
+		// Collect triangle vertices.
+		auto vFit = mesh.vertices(face);
+		v0 = *vFit;
+		++vFit;
+		v1 = *vFit;
+		++vFit;
+		v2 = *vFit;
+
+		// Compute one third area.
+		a = (vpoints[v1] - vpoints[v0]).cross(vpoints[v2] - vpoints[v0]).norm() / 6.0;
+
+		// Distribute area to vertices
+		varea[v0] += a;
+		varea[v1] += a;
+		varea[v2] += a;
 
 		do
 		{
@@ -267,45 +288,70 @@ They are K_max and K_min, the discrete principal curvatures
 Corresponding unit lenght eigenvectors are the principal directions*/
 void FeatureExtractor::ComputeMaxMinCurvatures()
 {
-
+	std::cout << "computing k_max, k_min and their principal directions for each vertex.\nThis'll take a minute..." << std::endl;
 	SurfaceMesh::Vertex_property<Vec3> vk_minDir = mesh.get_vertex_property<Vec3>("v:direction_kmin");
 	SurfaceMesh::Vertex_property<Vec3> vk_maxDir = mesh.get_vertex_property<Vec3>("v:direction_kmax");
 	SurfaceMesh::Vertex_property<Scalar> vk_min = mesh.get_vertex_property<Scalar>("v:curvature_kmin");
 	SurfaceMesh::Vertex_property<Scalar> vk_max = mesh.get_vertex_property<Scalar>("v:curvature_kmax");
 	SurfaceMesh::Vertex_property<Mat3x3> vShapeOp = mesh.get_vertex_property<Mat3x3>("v:shape_operator");
 
+	int i = 0;
+
 	//We'll need to solve eigenvalues/vectors for each vertice's shape operator
 	for (const auto& vertex : mesh.vertices())
 	{
-		
+		i++;
 		Eigen::EigenSolver<Eigen::Matrix3f> es(vShapeOp[vertex]);//thank goodness for this, now let's get our two largest absolute values
-		float k_max, k_min;
+		Scalar k_max, k_min;
 		Vec3 k_maxDir, k_minDir;
 
-		std::vector<std::pair<float, Vec3> > eigenPairs;
-		std::pair<float, Vec3> eigenValVec;
+		std::vector<std::pair<Scalar, Vec3> > eigenPairs;
+		std::pair<Scalar, Vec3> eigenValVec;
 		eigenValVec.first = es.eigenvalues()(0, 0).real(); eigenValVec.second = es.eigenvectors().col(0).real();
 		eigenPairs.push_back(eigenValVec);
-	
-		//if (es.eigenvalues()(0, 0).real() < es.eigenvalues()(1, 0).real() && es.eigenvalues()(0, 0).real() < es.eigenvalues()(2, 0).real())
-		//{//eigen value 1 is min
-		//	
-		//}
-		//else if (es.eigenvalues()(1, 0).real() < es.eigenvalues()(0, 0).real() && es.eigenvalues()(1, 0).real() < es.eigenvalues()(2, 0).real())
-		//{//eigen 2 is min
-		//	
-		//}
-		//else
-		//{//eigen 3 is min
-		//	
-		//}
 
-		vk_min[vertex] = k_min;
-		vk_max[vertex] = k_max;
-		vk_minDir[vertex] = k_minDir;
-		vk_maxDir[vertex] = k_maxDir;	
+		eigenValVec.first = es.eigenvalues()(1, 0).real(); eigenValVec.second = es.eigenvectors().col(0).real();
+		eigenPairs.push_back(eigenValVec);
+
+		eigenValVec.first = es.eigenvalues()(2, 0).real(); eigenValVec.second = es.eigenvectors().col(2).real();
+		eigenPairs.push_back(eigenValVec);
+
+		bool swapped = true;
+		while (swapped)
+		{
+			//do a lame bubble sort to get two highest values
+			for (int i = 0; i < eigenPairs.size() - 1; ++i)
+			{
+				if (abs(eigenPairs[i].first) > abs(eigenPairs[i + 1].first))
+				{//swap
+					std::pair<float, Vec3> swap = eigenPairs[i];
+					eigenPairs[i] = eigenPairs[i+1];
+					eigenPairs[i + 1] = swap;
+					swapped = true;
+				}
+				else
+				{
+					swapped = false;
+				}
+			}
+		}
+		//now sort these in increasing order so that we can pop last two for our values
+		k_max = eigenPairs.back().first; k_maxDir = eigenPairs.back().second;
+		eigenPairs.pop_back();
+		k_min = eigenPairs.back().first; k_minDir = eigenPairs.back().second;
+		//we'll also scale the curvatures here since "by construction, [they're] integrated quantities" (see paper)
+		vk_min[vertex] = k_min * (3.0f / varea[vertex]);
+		vk_max[vertex] = k_max * (3.0f / varea[vertex]);
+		vk_minDir[vertex] = k_minDir.normalized();
+		vk_maxDir[vertex] = k_maxDir.normalized();
+
+		if (i % 1000 == 0)
+		{
+			std::cout << "processed " << i << " of "<< mesh.n_vertices() << " vertices" << std::endl;
+		}
 	}
-	//We'll also scale the curvatures here "in order to obtain piecewise linear functions"
+
+	std::cout << "done finding principal curvatures and their directions" << std::endl;
 }
 
 /*deremine build piecewise linear functions by triangle*/
@@ -314,6 +360,21 @@ void FeatureExtractor::BuildLinearFunctions()
 	//TODO:
 	//remember to have good choices for sign of k_i vectors
 	//discard singular triangles (May do this when rest of project is done)
+	std::cout << "building extremality coefficients (e_i) for each vertex" << std::endl;
+	SurfaceMesh::Face_around_vertex_circulator fvc, fvc_end;
+	for (const auto& vertex : mesh.vertices())
+	{
+		fvc = mesh.faces(vertex);
+		fvc_end = fvc;
+
+		do
+		{
+
+		} while (++fvc != fvc_end);
+		
+	}
+
+	std::cout << "done building extremality coefficients" << std::endl;
 }
 
 /// Initialization
@@ -325,7 +386,8 @@ void FeatureExtractor::init()
 	//get 3X3 tensor matrices for each vertices
 	ComputeShapeOperators();
 	//get min and max curvatures from the tensor matrix shape operators
-//	ComputeMaxMinCurvatures();
+	ComputeMaxMinCurvatures();
+	BuildLinearFunctions();
 }
 
 void FeatureExtractor::exec()

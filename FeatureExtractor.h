@@ -45,6 +45,7 @@ private:
 	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> vcurvature_kmin;
 	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> vcurvature_principal;
 	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Mat3x3> vShapeOperator;
+	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> vextremality;
 
 	OpenGP::SurfaceMesh::Halfedge_property<OpenGP::Vec3> hface_norm;
 	OpenGP::SurfaceMesh::Edge_property<OpenGP::Mat3x3> eShapeOperator;
