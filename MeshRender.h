@@ -87,33 +87,33 @@ colour = fColour;
 			}
 			program.link();
 		}
-		bool renderK1 = false;
-		bool renderK2 = false;
-		bool renderPrincipal = false;
-		void renderCurvature(int i)
-		{
-			switch (i)
-			{
-			case 0: //don't render any curvature
-				renderK1 = renderK2 = renderPrincipal = false;
-				break;
-			case 1:
-				renderK1 = true;
-				renderK2 = renderPrincipal = false;
-				break;
-			case2:
-				renderK2 = true;
-				renderK1 = renderPrincipal = false;
-				break;
-			case 3:
-				renderPrincipal = true;
-				renderK2 = renderK1 = false;
-				break;
+		//bool renderK1 = false;
+		//bool renderK2 = false;
+		//bool renderPrincipal = false;
+		//void renderCurvature(int i)
+		//{
+		//	switch (i)
+		//	{
+		//	case 0: //don't render any curvature
+		//		renderK1 = renderK2 = renderPrincipal = false;
+		//		break;
+		//	case 1:
+		//		renderK1 = true;
+		//		renderK2 = renderPrincipal = false;
+		//		break;
+		//	case2:
+		//		renderK2 = true;
+		//		renderK1 = renderPrincipal = false;
+		//		break;
+		//	case 3:
+		//		renderPrincipal = true;
+		//		renderK2 = renderK1 = false;
+		//		break;
 
-			default:
-				break;
-			}
-		}
+		//	default:
+		//		break;
+		//	}
+		//}
 		void init(){
 			///--- Shader
 			program.add_vshader_from_source(vshader);
@@ -180,7 +180,7 @@ colour = fColour;
 			program.bind();
 			vao.bind();
 			//render curvatures
-			if (renderK1)
+		/*	if (renderK1)
 			{
 
 			}
@@ -195,7 +195,7 @@ colour = fColour;
 			else
 			{
 
-			}
+			}*/
 			Vec3 Colour(0, 1, 0);
 			program.set_attribute("fColour", Colour);
 			glDrawArrays(GL_TRIANGLES, 0, mesh.n_faces() * 3 /*#verts*/);

@@ -52,7 +52,7 @@ struct MainWindow : public ArcballWindow{
 		}
 		if (key == GLFW_KEY_0)
 		{//SHOW no CURVATURES
-			renderer.renderCurvature(0);
+		//	renderer.renderCurvature(0);
 		}
 		if (key == GLFW_KEY_1 && action == GLFW_RELEASE)
 		{//SHOW K1 CURVATURES
@@ -72,11 +72,11 @@ struct MainWindow : public ArcballWindow{
 		}
 		if (key == GLFW_KEY_2 && action == GLFW_RELEASE)
 		{//SHOW K2 CURVATURES
-			renderer.renderCurvature(2);
+		//	renderer.renderCurvature(2);
 		}
 		if (key == GLFW_KEY_3 && action == GLFW_RELEASE)
 		{//SHOW PRINCIPAL CURVATURES
-			renderer.renderCurvature(3);
+		//	renderer.renderCurvature(3);
 		}
 		
     }

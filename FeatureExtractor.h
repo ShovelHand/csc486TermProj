@@ -26,6 +26,7 @@ private:
 	void ComputeShapeOperators();
 	void ComputeMaxMinCurvatures();
 	void BuildLinearFunctions();
+	void correctCurvatureSigns();
 	
 	SurfaceMesh& mesh;
 	SurfaceMesh::Vertex_property<Vec3> vpoints;
@@ -49,5 +50,7 @@ private:
 
 	OpenGP::SurfaceMesh::Halfedge_property<OpenGP::Vec3> hface_norm;
 	OpenGP::SurfaceMesh::Edge_property<OpenGP::Mat3x3> eShapeOperator;
+
+	OpenGP::SurfaceMesh::Face_property<bool> fis_regular;
 
 };

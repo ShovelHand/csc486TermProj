@@ -23,6 +23,8 @@ FeatureExtractor::FeatureExtractor(SurfaceMesh& mesh) : mesh(mesh)
 	ecotan = mesh.add_edge_property<OpenGP::Scalar>("e:cotan");
 	eShapeOperator = mesh.add_edge_property<OpenGP::Mat3x3>("e:shape_operator");
 	hface_norm = mesh.add_halfedge_property<OpenGP::Vec3>("h:face_norm");
+	//face properties
+	fis_regular = mesh.add_face_property<bool>("f:is_regular");
 }
 
 FeatureExtractor::~FeatureExtractor()
@@ -177,12 +179,15 @@ FeatureExtractor::~FeatureExtractor()
 //compute shape operators for every edge on the mesh
 void FeatureExtractor::ComputeShapeOperators()
 {
+	std::cout << "computing shape operators..." << std::endl;
 	//give every halfedge the norm of its corresponding face to compute dihedral angles for edge shape operators
 	SurfaceMesh::Halfedge_around_face_circulator hfc, hfc_end;
 	
 	//compute voronoi area for each vertex and norm of each halfedge's corresponding face for dihedral angle calculation later.
 	for (const auto& face : mesh.faces())
 	{
+		SurfaceMesh::Face_property<bool> is_reg = mesh.get_face_property<bool>("f:is_regular");
+		is_reg[face] = true; //this will be used later for seeing if faces are regular or singular. For now we can ignore.
 		//initialize iterators
 		hfc = mesh.halfedges(face);
 		hfc_end = hfc;
@@ -280,7 +285,7 @@ void FeatureExtractor::ComputeShapeOperators()
 		SurfaceMesh::Vertex_property<Mat3x3> vShapeOp = mesh.get_vertex_property<Mat3x3>("v:shape_operator");
 		vShapeOp[vertex] = vShapeOperator;
 	}
-
+	std::cout << "done computing shape operators" << std::endl;
 }
 
 /*Get two highest absolute Eigenvalues from each vertices' shape operator. 
@@ -288,7 +293,7 @@ They are K_max and K_min, the discrete principal curvatures
 Corresponding unit lenght eigenvectors are the principal directions*/
 void FeatureExtractor::ComputeMaxMinCurvatures()
 {
-	std::cout << "computing k_max, k_min and their principal directions for each vertex.\nThis'll take a minute..." << std::endl;
+	std::cout << "computing k_max, k_min and their principal directions for each vertex.\nThis may take a minute..." << std::endl;
 	SurfaceMesh::Vertex_property<Vec3> vk_minDir = mesh.get_vertex_property<Vec3>("v:direction_kmin");
 	SurfaceMesh::Vertex_property<Vec3> vk_maxDir = mesh.get_vertex_property<Vec3>("v:direction_kmax");
 	SurfaceMesh::Vertex_property<Scalar> vk_min = mesh.get_vertex_property<Scalar>("v:curvature_kmin");
@@ -350,31 +355,113 @@ void FeatureExtractor::ComputeMaxMinCurvatures()
 			std::cout << "processed " << i << " of "<< mesh.n_vertices() << " vertices" << std::endl;
 		}
 	}
-
 	std::cout << "done finding principal curvatures and their directions" << std::endl;
 }
 
 /*deremine build piecewise linear functions by triangle*/
 void FeatureExtractor::BuildLinearFunctions()
 {
-	//TODO:
-	//remember to have good choices for sign of k_i vectors
+	//TODO: the following aren't done yet
 	//discard singular triangles (May do this when rest of project is done)
 	std::cout << "building extremality coefficients (e_i) for each vertex" << std::endl;
 	SurfaceMesh::Face_around_vertex_circulator fvc, fvc_end;
-	for (const auto& vertex : mesh.vertices())
+	for (const auto& vertex : mesh.vertices()) //for every vertex...
 	{
 		fvc = mesh.faces(vertex);
+		SurfaceMesh::Vertex_around_face_circulator vfc, vfc_end;
 		fvc_end = fvc;
-
-		do
+		Scalar e = 0.0;
+		do //get area and derivative of mean curvature for triangle ::NOT SURE IF SHOULD BE MEAN CURVATURE
 		{
-
-		} while (++fvc != fvc_end);
+			//first we gotta get the area of the triangle
+			vfc = mesh.vertices(*fvc);
+			vfc_end = vfc;
 		
+			Vec3 P = mesh.position(*vfc); ++vfc;
+			Vec3 Q = mesh.position(*vfc); ++vfc;
+			Vec3 R = mesh.position(*vfc);
+			Vec3 PQ = Q - P;
+			Vec3 PR = R - P;
+			Vec3 crossVec = PQ.cross(PR); //triangle area is length of cross product
+			Scalar areaT = sqrtf(powf(crossVec.x(), 2) + powf(crossVec.y(), 2) + powf(crossVec.z(), 2)) / 2.0f;
+			//GET HELP! ASK ANDREA IF THIS HAS BEEN DONE WELL
+			//get mean curvature of triangle, computed as the average of each vertices k_1, k_2 curvatures.
+			vfc = mesh.vertices(*fvc);
+			Scalar meanCurvature = 0.0;
+			SurfaceMesh::Vertex_property<Scalar> k_min = mesh.get_vertex_property<Scalar>("v:curvature_kmin");
+			SurfaceMesh::Vertex_property<Scalar> k_max = mesh.get_vertex_property<Scalar>("v:curvature_kmax");
+			do
+			{
+				meanCurvature += (k_min[*vfc] + k_max[*vfc]) / 2.0f;
+			} while (++vfc != vfc_end);
+			meanCurvature /= 3.0f; //average it out/
+			Vec3 GradKofTriangle = 2 * meanCurvature*mesh.compute_face_normal(*fvc); //I believe this is correct from Laplace-Beltrami notes, but ASK FOR HELP
+			SurfaceMesh::Vertex_property<Vec3> k_maxDir = mesh.get_vertex_property<Vec3>("v:direction_kmax");
+			e += areaT * (GradKofTriangle.dot(k_maxDir[vertex]));
+		} while (++fvc != fvc_end);
+		SurfaceMesh::Vertex_property<Scalar> areaofP = mesh.get_vertex_property<Scalar>("v:area");
+		e *= (1.0f / areaofP[vertex]);
+	}
+	std::cout << "done building extremality coefficients" << std::endl;
+}
+
+//flips signs of principal curvature directions k_min and k_max for vertices such that they are consistent for each triangle
+//if this isn't possible, the triangle is 'singular', and we will regard it no more in our calculations
+void FeatureExtractor::correctCurvatureSigns()
+{
+	std::cout << "making sure signs (+/-) of curvature directions are consistent for each triangle" << std::endl;
+	SurfaceMesh::Vertex_around_face_circulator vfc, vfc_end;
+	int singles = 0;
+	
+	for (const auto& face : mesh.faces())
+	{
+		vfc = mesh.vertices(face);
+		vfc_end = vfc;
+		SurfaceMesh::Vertex_iterator v0 = (*vfc); ++vfc;
+		SurfaceMesh::Vertex_iterator v1 = (*vfc); ++vfc;
+		SurfaceMesh::Vertex_iterator v2 = (*vfc);
+		SurfaceMesh::Vertex_property<Vec3> k_iDir = mesh.get_vertex_property<Vec3>("v:direction_kmax");
+		Vec3 k_iDirV0 = k_iDir[*v0];
+		Vec3 k_iDirV1 = k_iDir[*v1];
+		Vec3 k_iDirV2 = k_iDir[*v2];
+
+		if (k_iDirV0.dot(k_iDirV1) > 0 && k_iDirV0.dot(k_iDirV2) > 0 && k_iDirV1.dot(k_iDirV2) > 0)
+			continue;  //everything good! no signs need be flipped
+		else
+		{//find sign on vector(s) that needs flipping. If nothing works, mark face as singular.
+			//just flip each vector one at a time and check for good fit
+			Vec3 flippedVec = -1 * k_iDirV0;
+			if (flippedVec.dot(k_iDirV1) > 0 && flippedVec.dot(k_iDirV2) > 0 && k_iDirV1.dot(k_iDirV2) > 0)
+			{
+			//	std::cout << "flipped" << std::endl;
+				k_iDirV0 *= -1;
+				continue;
+			}
+			flippedVec = -1 * k_iDirV1;
+			if (k_iDirV0.dot(flippedVec) > 0 && k_iDirV0.dot(k_iDirV2) > 0 && flippedVec.dot(k_iDirV2) > 0)
+			{
+			//	std::cout << "flipped" << std::endl;
+				k_iDirV1 *= -1;
+				continue;
+			}
+			flippedVec = -1 * k_iDirV1;
+			if (k_iDirV0.dot(k_iDirV1) > 0 && k_iDirV0.dot(flippedVec) > 0 && k_iDirV1.dot(flippedVec) > 0)
+			{
+			//	std::cout << "flipped" << std::endl;
+				k_iDirV2 *= -1;
+				continue;
+			}
+			else
+			{//this face must forever bear the shame of being a single. May God have mercy on its soul.
+				singles++;
+				SurfaceMesh::Face_property<bool> is_reg = mesh.get_face_property<bool>("f:is_regular");
+				is_reg[face] = false; //this will be used later for seeing if faces are regular or singular. For now we can ignore.
+			}
+		}
 	}
 
-	std::cout << "done building extremality coefficients" << std::endl;
+	std::cout << "finished checking curvature direction signs. " << singles << " triangles are singles. This is " << float(singles) / float(mesh.faces_size())
+		<< " percent of the mesh's faces" << std::endl;
 }
 
 /// Initialization
@@ -388,6 +475,7 @@ void FeatureExtractor::init()
 	//get min and max curvatures from the tensor matrix shape operators
 	ComputeMaxMinCurvatures();
 	BuildLinearFunctions();
+	correctCurvatureSigns();
 }
 
 void FeatureExtractor::exec()
