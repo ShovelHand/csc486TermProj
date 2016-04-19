@@ -39,142 +39,6 @@ FeatureExtractor::~FeatureExtractor()
 	//TODO:: remember to remove vertex properties, etc that you've haphazardly added
 	mesh.garbage_collection();
 }
-//
-//void FeatureExtractor::ComputeCurvatures()
-//{
-//	//compute mean curvatures
-//	for (auto const& vertex : mesh.vertices()) {
-//		varea[vertex] = 0.0;
-//	}
-//	SurfaceMesh::Vertex_around_face_circulator vFit;
-//	SurfaceMesh::Vertex v0, v1, v2;
-//	Scalar a;
-//
-//	//compute gaussian curvature for each vertex
-//	SurfaceMesh::Halfedge nextEdge;
-//	Point p, p0, p1, d0, d1;
-//	Scalar theta, area;
-//
-//	for (auto const& vertex : mesh.vertices())
-//	{
-//		theta = 0.0f;
-//		area = 0.0f;
-//
-//		for (auto const& edge : mesh.halfedges(vertex))
-//		{
-//			nextEdge = mesh.next_halfedge(edge);
-//
-//			v0 = mesh.from_vertex(nextEdge);
-//			v1 = mesh.to_vertex(nextEdge);
-//
-//			p0 = vpoints[v0];
-//			p1 = vpoints[v1];
-//			p = vpoints[vertex];
-//
-//			d0 = p0 - p;
-//			d1 = p1 - p;
-//			d0.normalize();
-//			d1.normalize();
-//
-//			// Get the angle.
-//			theta += std::acos(d0.dot(d1));
-//
-//			// Now get the area.
-//			area += (1 / 6.0f) * (d0.cross(d1)).norm();
-//		}
-//
-//		vcurvature_K[vertex] = (2 * M_PI - theta) / area;
-//	}
-//	//end of computing gaussian curvature
-//
-//	//compute voronoi area for each vertex
-//	for (auto const& face : mesh.faces()) {
-//		// Collect triangle vertices.
-//		auto vFit = mesh.vertices(face);
-//		v0 = *vFit;
-//		++vFit;
-//		v1 = *vFit;
-//		++vFit;
-//		v2 = *vFit;
-//
-//		// Compute one third area.
-//		a = (vpoints[v1] - vpoints[v0]).cross(vpoints[v2] - vpoints[v0]).norm() / 6.0;
-//
-//		// Distribute area to vertices
-//		varea[v0] += a;
-//		varea[v1] += a;
-//		varea[v2] += a;
-//	}
-//		//compute mean curvature for each vertex
-//		Scalar alpha, beta;
-//		Point laplace;
-//
-//		for (const auto& vertex : mesh.vertices()) {
-//			laplace = Point(0, 0, 0);
-//
-//			if (!mesh.is_boundary(vertex)) {
-//				for (const auto& neighbour : mesh.halfedges(vertex)) {
-//					nextEdge = mesh.next_halfedge(neighbour);
-//
-//					v0 = mesh.from_vertex(nextEdge);
-//					v1 = mesh.to_vertex(nextEdge);
-//
-//					p0 = vpoints[v0];
-//					p1 = vpoints[v1];
-//					p = vpoints[vertex];
-//
-//					d0 = p - p0;
-//					d1 = p1 - p0;
-//
-//					d0.normalize();
-//					d1.normalize();
-//
-//					beta = std::acos(d0.dot(d1));
-//
-//					d0 = p - p1;
-//					d1 = p0 - p1;
-//
-//					d0.normalize();
-//					d1.normalize();
-//
-//					alpha = std::acos(d0.dot(d1));
-//
-//					Scalar cotanAlpha = 1.0f / std::tan(alpha);
-//					Scalar cotanBeta = 1.0f / std::tan(beta);
-//
-//					laplace += (cotanAlpha + cotanBeta) * (p0 - p);
-//				}
-//
-//				laplace /= 2.0 * varea[vertex];
-//			}
-//
-//			vcurvature_H[vertex] = 0.5 * laplace.norm();
-//		}//end of computing mean curvatures
-//
-//		//get k1 curvatures from mean and gaussian curvatures
-//		for (auto const& vertex : mesh.vertices())
-//			vcurvature_k1[vertex] = vcurvature_H[vertex] + sqrt((vcurvature_H[vertex] * vcurvature_H[vertex]) - vcurvature_K[vertex]);
-//
-//		//get k2 curvatures from mean and gaussian curvatures
-//		for (auto const& vertex : mesh.vertices())
-//			vcurvature_k2[vertex] = vcurvature_H[vertex] - sqrt((vcurvature_H[vertex] * vcurvature_H[vertex]) - vcurvature_K[vertex]);
-//
-//		create_colours(vcurvature_k1);
-//
-//		//determine which curvature, k1, or k2, is the principal curvature
-//		//the lines of largest principal curvatures are the crest lines
-//		for (auto const& vertex : mesh.vertices())
-//		{
-//			if (abs(vcurvature_k1[vertex]) > abs(vcurvature_k2[vertex]))
-//			{
-//				vcurvature_principal[vertex] = vcurvature_k1[vertex];
-//			}
-//			else if (abs(vcurvature_k2[vertex]) > abs(vcurvature_k1[vertex]))
-//			{
-//				vcurvature_principal[vertex] = vcurvature_k2[vertex];
-//			}
-//		}
-//}
 
 //compute shape operators for every edge on the mesh
 void FeatureExtractor::ComputeShapeOperators()
@@ -240,7 +104,7 @@ void FeatureExtractor::ComputeShapeOperators()
 			Vec3 p2 = mesh.position(mesh.to_vertex(*hvc));
 			Vec3 e = (p2 - p1); 
 			//compute mean curvature H_e for edge e
-			float H_e = 2.0f * sqrtf(powf(e.x(), 2) + powf(e.y(), 2) + powf(e.z(), 2)) *(theta / 2.0f);//NOT SURE THIS IS RIGHT, ASK ANDREA. PARTICULARLY NOT SURE IF LENGHT OF E IS WHAT IS DESIRED
+			float H_e = 2.0f * sqrtf(powf(e.x(), 2) + powf(e.y(), 2) + powf(e.z(), 2)) *(theta / 2.0f);
 			e.normalize();
 			//get N_e, the average of the surface normals on either side of the edge
 			Vec3 N_e = (faceNorm[*hvc] + faceNorm[reciprocalEdge]) / (firstLength + secondLength);
@@ -260,8 +124,7 @@ void FeatureExtractor::ComputeShapeOperators()
 		SurfaceMesh::Vertex v0, v1;
 		hvc = mesh.halfedges(vertex);
 		hvc_end = hvc;
-		float avgDiv = 0.0f;
-		
+
 		do
 		{
 			v0 = mesh.from_vertex(*hvc);
@@ -277,11 +140,9 @@ void FeatureExtractor::ComputeShapeOperators()
 			SurfaceMesh::Edge thisEdge = mesh.find_edge(v0, v1); 
 			SurfaceMesh::Edge_property<Mat3x3> eShapeOperator = mesh.get_edge_property<Mat3x3>("e:shape_operator");
 			vShapeOperator += (N_p.dot(N_e))* eShapeOperator[thisEdge];
-			avgDiv += 1;
 		} while (++hvc != hvc_end);
-		
-		assert(avgDiv > 0);//ASK ABOUT THIS. PAPER SHOWS 1/2 IN FRONT OF SIGMA, BUT SAYS IT'S AN AVERAGE
-		vShapeOperator /= avgDiv;
+
+		vShapeOperator /= 2.0f;
 		SurfaceMesh::Vertex_property<Mat3x3> vShapeOp = mesh.get_vertex_property<Mat3x3>("v:shape_operator");
 		vShapeOp[vertex] = vShapeOperator;
 	}
@@ -362,7 +223,7 @@ void FeatureExtractor::ComputeMaxMinCurvatures()
 void FeatureExtractor::BuildLinearFunctions()
 {
 	//TODO: the following aren't done yet
-	//discard singular triangles (May do this when rest of project is done)
+	//discard singular triangles (May do this when rest of project is done) *UPDATE they are now marked as single though
 	std::cout << "building extremality coefficients (e_i) for each vertex" << std::endl;
 	SurfaceMesh::Face_around_vertex_circulator fvc, fvc_end;
 	for (const auto& vertex : mesh.vertices()) //for every vertex...
@@ -407,7 +268,7 @@ void FeatureExtractor::BuildLinearFunctions()
 
 //flips signs of principal curvature directions k_min and k_max for vertices such that they are consistent for each triangle
 //if this isn't possible, the triangle is 'singular', and we will regard it no more in our calculations
-void FeatureExtractor::correctCurvatureSigns()
+void FeatureExtractor::CorrectCurvatureSigns()
 {
 	std::cout << "making sure signs (+/-) of curvature directions are consistent for each triangle" << std::endl;
 	SurfaceMesh::Vertex_around_face_circulator vfc, vfc_end;
@@ -460,8 +321,35 @@ void FeatureExtractor::correctCurvatureSigns()
 		}
 	}
 
-	std::cout << "finished checking curvature direction signs. " << singles << " triangles are singles. This is " << float(singles) / float(mesh.faces_size())
+	std::cout << "finished checking curvature direction signs. " << singles << " triangles are singles. This is " << (float(singles) / float(mesh.faces_size()))*100.0f
 		<< " percent of the mesh's faces" << std::endl;
+}
+
+//now we can compute line segments that the feature lines!
+void FeatureExtractor::ComputeFeatureLines()
+{
+	std::cout << "extracting feature lines. (not implemented yet)" << std::endl;
+	
+	for (const auto& face : mesh.faces())
+	{
+		SurfaceMesh::Vertex_around_face_circulator vfc, vfc_end;
+		vfc = mesh.vertices(face);
+		vfc_end = vfc;
+		SurfaceMesh::Vertex_iterator v0 = (*vfc); ++vfc;
+		SurfaceMesh::Vertex_iterator v1 = (*vfc); ++vfc;
+		SurfaceMesh::Vertex_iterator v2 = (*vfc);
+		SurfaceMesh::Vertex_property<Vec3> k_iDir = mesh.get_vertex_property<Vec3>("v:direction_kmax");
+		Vec3 k_iDirV0 = k_iDir[*v0];
+		Vec3 k_iDirV1 = k_iDir[*v1];
+		Vec3 k_iDirV2 = k_iDir[*v2];
+
+	}
+}
+
+//We need to process singular triangles to allow for stable computation of extremalities
+void FeatureExtractor::ProcessSingularTriangles()
+{
+	//TODO::might not get done before demo.
 }
 
 /// Initialization
@@ -469,13 +357,16 @@ void FeatureExtractor::init()
 {
     // why? because face normals are needed to compute the initial quadrics
     mesh.update_face_normals();
+	mesh.update_vertex_normals();
 
 	//get 3X3 tensor matrices for each vertices
 	ComputeShapeOperators();
 	//get min and max curvatures from the tensor matrix shape operators
 	ComputeMaxMinCurvatures();
 	BuildLinearFunctions();
-	correctCurvatureSigns();
+	CorrectCurvatureSigns();
+	ComputeFeatureLines();
+	ProcessSingularTriangles();
 }
 
 void FeatureExtractor::exec()

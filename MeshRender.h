@@ -73,7 +73,7 @@ colour = fColour;
 		void setSmooth()
 		{
 			renderSmooth = !renderSmooth;
-			
+
 			if (renderSmooth)
 			{
 				program.current_program_id();
@@ -169,9 +169,9 @@ colour = fColour;
 			normalbuffer.upload(n_tri);
 			barycbuffer.upload(b_tri);
 
-		
-		
-			
+
+
+
 		}
 
 		Box3 bounding_box(){ return OpenGP::bounding_box(mesh); }
@@ -179,32 +179,16 @@ colour = fColour;
 		void display(){
 			program.bind();
 			vao.bind();
-			//render curvatures
-		/*	if (renderK1)
-			{
-
-			}
-			else if (renderK2)
-			{
-
-			}
-			else if (renderPrincipal)
-			{
-
-			}
-			else
-			{
-
-			}*/
+		
 			Vec3 Colour(0, 1, 0);
 			program.set_attribute("fColour", Colour);
 			glDrawArrays(GL_TRIANGLES, 0, mesh.n_faces() * 3 /*#verts*/);
-		
+
 
 			//render min features
 			Colour = Vec3(0, 0, 1);
 			program.set_attribute("fColour", Colour);
-		
+
 			vao.release();
 			program.release();
 		}

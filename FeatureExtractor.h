@@ -26,7 +26,13 @@ private:
 	void ComputeShapeOperators();
 	void ComputeMaxMinCurvatures();
 	void BuildLinearFunctions();
-	void correctCurvatureSigns();
+	void CorrectCurvatureSigns();
+	void ComputeFeatureLines();
+	void ProcessSingularTriangles();
+
+	//getters
+	std::vector<Vec3> GetSingleTriangles(){ return singleTriangles; }
+	std::vector<Vec3> GetRidgeLinePoints(){ return ridgeLinePoints; }
 	
 	SurfaceMesh& mesh;
 	SurfaceMesh::Vertex_property<Vec3> vpoints;
@@ -52,5 +58,9 @@ private:
 	OpenGP::SurfaceMesh::Edge_property<OpenGP::Mat3x3> eShapeOperator;
 
 	OpenGP::SurfaceMesh::Face_property<bool> fis_regular;
+
+	//stuff we will want to render
+	std::vector<Vec3> singleTriangles; //we might want to render these for fun.
+	std::vector<Vec3> ridgeLinePoints;
 
 };
