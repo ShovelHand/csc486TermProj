@@ -95,10 +95,14 @@ void FeatureExtractor::ComputeShapeOperators()
 			SurfaceMesh::Halfedge reciprocalEdge = mesh.find_halfedge(v1, v0);
 			//get face normal associated with both halfedges to compute dihedral angle
 			SurfaceMesh::Halfedge_property<Vec3> faceNorm = mesh.get_halfedge_property<Vec3>("h:face_norm");
-			//ASK ABOUT EIGEN OPERATORS FOR GETTING VECTOR LENGTH
-			float firstLength = sqrtf(powf(faceNorm[*hvc].x(), 2)+ powf(faceNorm[*hvc].y(), 2)+ powf(faceNorm[*hvc].z(), 2));
-			float secondLength = sqrtf(powf(faceNorm[reciprocalEdge].x(), 2) + powf(faceNorm[reciprocalEdge].y(), 2) + powf(faceNorm[reciprocalEdge].z(), 2));
-			float theta = acos((faceNorm[*hvc].dot(faceNorm[reciprocalEdge]))/(firstLength*secondLength));
+
+			//get dihedral angle theta
+			Vec3 alpha = mesh.position(v0).cross(faceNorm[*hvc]);
+			Vec3 beta = mesh.position(mesh.from_vertex(reciprocalEdge)).cross(faceNorm[reciprocalEdge]);
+			float firstLength = sqrtf(powf(alpha.x(), 2) + powf(alpha.y(), 2) + powf(alpha.z(), 2));
+			float secondLength = sqrtf(powf(beta.x(), 2) + powf(beta.y(), 2) + powf(beta.z(), 2));
+			float theta = acosf(alpha.dot(beta) / (firstLength*secondLength));
+
 			//compute direction of edge e. Orientation not important
 			Vec3 p1 = mesh.position(mesh.from_vertex(*hvc));
 			Vec3 p2 = mesh.position(mesh.to_vertex(*hvc));
@@ -245,18 +249,31 @@ void FeatureExtractor::BuildLinearFunctions()
 			Vec3 PR = R - P;
 			Vec3 crossVec = PQ.cross(PR); //triangle area is length of cross product
 			Scalar areaT = sqrtf(powf(crossVec.x(), 2) + powf(crossVec.y(), 2) + powf(crossVec.z(), 2)) / 2.0f;
-			//GET HELP! ASK ANDREA IF THIS HAS BEEN DONE WELL
+
 			//get mean curvature of triangle, computed as the average of each vertices k_1, k_2 curvatures.
-			vfc = mesh.vertices(*fvc);
-			Scalar meanCurvature = 0.0;
-			SurfaceMesh::Vertex_property<Scalar> k_min = mesh.get_vertex_property<Scalar>("v:curvature_kmin");
-			SurfaceMesh::Vertex_property<Scalar> k_max = mesh.get_vertex_property<Scalar>("v:curvature_kmax");
-			do
+			Vec3 GradKofTriangle(0, 0, 0);
 			{
-				meanCurvature += (k_min[*vfc] + k_max[*vfc]) / 2.0f;
-			} while (++vfc != vfc_end);
-			meanCurvature /= 3.0f; //average it out/
-			Vec3 GradKofTriangle = 2 * meanCurvature*mesh.compute_face_normal(*fvc); //I believe this is correct from Laplace-Beltrami notes, but ASK FOR HELP
+				vfc = mesh.vertices(*fvc);
+
+				//		Scalar meanCurvature = 0.0;
+				
+				SurfaceMesh::Vertex_property<Scalar> k_min = mesh.get_vertex_property<Scalar>("v:curvature_kmin");
+				SurfaceMesh::Vertex_property<Scalar> k_max = mesh.get_vertex_property<Scalar>("v:curvature_kmax");
+				SurfaceMesh::Vertex_iterator Vi = *vfc;
+				++vfc;
+				SurfaceMesh::Vertex_iterator Vj = *vfc;
+				++vfc;
+				SurfaceMesh::Vertex_iterator Vk = *vfc;
+
+				Vec3 gradB_i = ((mesh.position(*Vk) - (mesh.position(*Vj))) / (2 * areaT));
+				Vec3 gradB_j = ((mesh.position(*Vk) - (mesh.position(*Vi))) / (2 * areaT));
+				Vec3 gradB_k = ((mesh.position(*Vj) - (mesh.position(*Vi))) / (2 * areaT));
+				GradKofTriangle = k_max[*Vi] * gradB_i + k_max[*Vj] * gradB_j + k_max[*Vk] * gradB_k;
+			}
+
+		//	meanCurvature /= 3.0f; //average it out/
+		
+			//Vec3 GradKofTriangle = 2 * meanCurvature*mesh.compute_face_normal(*fvc); //I believe this is correct from Laplace-Beltrami notes, but ASK FOR HELP
 			SurfaceMesh::Vertex_property<Vec3> k_maxDir = mesh.get_vertex_property<Vec3>("v:direction_kmax");
 			e += areaT * (GradKofTriangle.dot(k_maxDir[vertex]));
 		} while (++fvc != fvc_end);
@@ -329,7 +346,7 @@ void FeatureExtractor::CorrectCurvatureSigns()
 void FeatureExtractor::ComputeFeatureLines()
 {
 	std::cout << "extracting feature lines. (not implemented yet)" << std::endl;
-	
+	int noCrossCount = 0;
 	for (const auto& face : mesh.faces())
 	{
 		SurfaceMesh::Vertex_around_face_circulator vfc, vfc_end;
@@ -339,11 +356,40 @@ void FeatureExtractor::ComputeFeatureLines()
 		SurfaceMesh::Vertex_iterator v1 = (*vfc); ++vfc;
 		SurfaceMesh::Vertex_iterator v2 = (*vfc);
 		SurfaceMesh::Vertex_property<Vec3> k_iDir = mesh.get_vertex_property<Vec3>("v:direction_kmax");
+		SurfaceMesh::Vertex_property<Scalar> e_i = mesh.get_vertex_property<Scalar>("v:extremality");
+		SurfaceMesh::Vertex_property<Scalar> k_iMax = mesh.get_vertex_property<Scalar>("v:curvature_kmax");
+		SurfaceMesh::Vertex_property<Scalar> k_iMin = mesh.get_vertex_property<Scalar>("v:curvature_kmin");
+
 		Vec3 k_iDirV0 = k_iDir[*v0];
 		Vec3 k_iDirV1 = k_iDir[*v1];
 		Vec3 k_iDirV2 = k_iDir[*v2];
 
-	}
+		Scalar e_0 = e_i[*v0];
+		Scalar e_1 = e_i[*v1];
+		Scalar e_2 = e_i[*v2];
+
+		Vec3 PQ = mesh.position(*v1) - mesh.position(*v0);
+		Vec3 PR = mesh.position(*v1) - mesh.position(*v2);
+		Vec3 crossVec = PQ.cross(PR); //triangle area is length of cross product
+		Scalar areaT = sqrtf(powf(crossVec.x(), 2) + powf(crossVec.y(), 2) + powf(crossVec.z(), 2)) / 2.0f;
+
+			Vec3 gradB_i = ((mesh.position(*v2) - (mesh.position(*v1))) / (2 * areaT));
+			Vec3 gradB_j = ((mesh.position(*v2) - (mesh.position(*v0))) / (2 * areaT));
+			Vec3 gradB_k = ((mesh.position(*v1) - (mesh.position(*v0))) / (2 * areaT));
+
+			Vec3 gradE_i = e_0 * gradB_i + e_1 * gradB_j + e_2 * gradB_k;
+			
+			//if either of these are true, no ridge line.
+			if (gradE_i.dot((k_iDirV0 + k_iDirV1 + k_iDirV2)) > 0 ||
+				(abs(k_iMax[*v0] + k_iMax[*v1] + k_iMax[*v2]) < abs(k_iMin[*v0] + k_iMin[*v1] + k_iMin[*v2]))) 
+			{
+				std::cout << "no crossing" << std::endl;
+				noCrossCount += 1;
+				continue;
+			}
+			
+		} 
+	std::cout << noCrossCount << std::endl;
 }
 
 //We need to process singular triangles to allow for stable computation of extremalities

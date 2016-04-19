@@ -45,6 +45,7 @@ struct MainWindow : public ArcballWindow{
         if(key==GLFW_KEY_SPACE && action==GLFW_RELEASE){
     //        extractor.exec();
             mesh.update_face_normals();
+			mesh.update_vertex_normals();
        //     renderer.init_data();
         }
 		if (key == GLFW_KEY_S && action == GLFW_RELEASE)

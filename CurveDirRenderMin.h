@@ -65,7 +65,7 @@ namespace OpenGP {
 		void shouldRender(){ bRender = !bRender; }
 
 		void init(){
-			bRender = false;
+			bRender = true;
 			program.add_vshader_from_source(vshader);
 			program.add_fshader_from_source(fshader);
 			program.link();
