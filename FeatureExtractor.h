@@ -13,26 +13,25 @@ public:
 	~FeatureExtractor();
 
 	void init();
-	void exec();
+	//getters
+	std::vector<Vec3> GetSingleTriangles(){ return singleTriangles; }
+	std::vector<Vec3> GetRidgeLinePoints(){ return ridgeLinePoints; }
 
 private:
 	//these will probably get removed from the final project, but for now are great for checking if curvature is computed well
 	//from lab3 curvature
-	void create_colours(OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> prop);
 	void visualize_k1_curvature();
 	void visualize_k2_curvature();
 
 //	void ComputeCurvatures();
-	void ComputeShapeOperators();
+	void ComputeVertexShapeOperators();
+	OpenGP::Mat3x3 ComputeEdgeShapeOperators(SurfaceMesh::Vertex_iterator vertex);
 	void ComputeMaxMinCurvatures();
 	void BuildLinearFunctions();
 	void CorrectCurvatureSigns();
 	void ComputeFeatureLines();
 	void ProcessSingularTriangles();
-
-	//getters
-	std::vector<Vec3> GetSingleTriangles(){ return singleTriangles; }
-	std::vector<Vec3> GetRidgeLinePoints(){ return ridgeLinePoints; }
+	Vec3 ComputeRidgePoint(SurfaceMesh::Vertex_iterator v1, SurfaceMesh::Vertex_iterator v2);
 	
 	SurfaceMesh& mesh;
 	SurfaceMesh::Vertex_property<Vec3> vpoints;
@@ -42,19 +41,16 @@ private:
 	//OpenGP::SurfaceMesh::Vertex_property<OpenGP::Point> vpoint;
 	OpenGP::SurfaceMesh::Vertex_property<float> vquality;
 	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> varea;
-	OpenGP::SurfaceMesh::Edge_property<OpenGP::Scalar> ecotan;
 	
-	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> vcurvature_K;
-	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> vcurvature_H;
 	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Vec3> vdirection_kmax;
 	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Vec3> vdirection_kmin;
 	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> vcurvature_kmax;
 	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> vcurvature_kmin;
-	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> vcurvature_principal;
 	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Mat3x3> vShapeOperator;
 	OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> vextremality;
 
 	OpenGP::SurfaceMesh::Halfedge_property<OpenGP::Vec3> hface_norm;
+	OpenGP::SurfaceMesh::Halfedge_property<bool> hTraversed_this_time;
 	OpenGP::SurfaceMesh::Edge_property<OpenGP::Mat3x3> eShapeOperator;
 
 	OpenGP::SurfaceMesh::Face_property<bool> fis_regular;

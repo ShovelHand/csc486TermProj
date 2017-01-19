@@ -8,6 +8,7 @@
 #include <OpenGP/SurfaceMesh/GL/SurfaceMeshRenderVertexNormals.h>
 #include "CurveDirRenderer.h"
 #include "CurveDirRenderMin.h"
+#include "FeatureRenderer.h"
 
 using namespace OpenGP;
 
@@ -16,9 +17,10 @@ struct MainWindow : public ArcballWindow{
     SurfaceMesh mesh;
 	FeatureExtractor extractor = FeatureExtractor(mesh);
     MeshRender renderer = MeshRender(mesh);
-	SurfaceMeshRenderFlat flatRenderer = SurfaceMeshRenderFlat(mesh);
+//	SurfaceMeshRenderFlat flatRenderer = SurfaceMeshRenderFlat(mesh);
 	CurveDirRender curve1Renderer = CurveDirRender(mesh);
 	CurveDirRenderMin curve2Renderer = CurveDirRenderMin(mesh);
+	FeatureRenderer featureRenderer = FeatureRenderer(mesh);
 	
 	
 	
@@ -30,11 +32,16 @@ struct MainWindow : public ArcballWindow{
         mesh.update_face_normals(); ///< shading
        
         extractor.init();
+		featureRenderer.setSegmentPoints(extractor.GetRidgeLinePoints());
 		std::cout << "press '1' to toggle rendering curvature directions" << std::endl;
+		std::cout << "press '2' to toggle rendering object mesh" << std::endl;
+		std::cout << "press '3' to toggle rendering feature lines" << std::endl;
+		std::cout << "press '4' to toggle rendering the points that make feature line segments" << std::endl;
 		//render curve directions 
 		this->scene.add(curve1Renderer); //render max curvatures
 		this->scene.add(curve2Renderer); //render min curvatures
 		this->scene.add(renderer);
+	//	this->scene.add(featureRenderer);
 //		this->scene.add(flatRenderer);
 
 	
@@ -43,7 +50,6 @@ struct MainWindow : public ArcballWindow{
     void key_callback(int key, int scancode, int action, int mods) override{
         ArcballWindow::key_callback(key, scancode, action, mods);
         if(key==GLFW_KEY_SPACE && action==GLFW_RELEASE){
-    //        extractor.exec();
             mesh.update_face_normals();
 			mesh.update_vertex_normals();
        //     renderer.init_data();
@@ -68,11 +74,15 @@ struct MainWindow : public ArcballWindow{
 			
 		if (key == GLFW_KEY_2 && action == GLFW_RELEASE)
 		{//SHOW K2 CURVATURES
-		//	renderer.renderCurvature(2);
+			renderer.setShouldRender();
 		}
 		if (key == GLFW_KEY_3 && action == GLFW_RELEASE)
 		{//SHOW PRINCIPAL CURVATURES
-		//	renderer.renderCurvature(3);
+			featureRenderer.shouldRenderLines();
+		}
+		if (key == GLFW_KEY_4 && action == GLFW_RELEASE)
+		{//SHOW PRINCIPAL CURVATURES
+			featureRenderer.shouldRenderPoints();
 		}
 		
     }

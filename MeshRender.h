@@ -24,7 +24,7 @@ namespace OpenGP {
 		std::vector<GLuint> minVerticesBuffers;
 		std::vector<VertexArrayObject> maxVerticesBuffers;
 
-		bool renderSmooth = false;
+		bool shouldRender;
 
 	private:
 		const GLchar* vshader = R"GLSL(
@@ -70,51 +70,13 @@ colour = fColour;
 	public:
 		MeshRender(SurfaceMesh& mesh) : mesh(mesh){}
 
-		void setSmooth()
+		void setShouldRender()
 		{
-			renderSmooth = !renderSmooth;
-
-			if (renderSmooth)
-			{
-				program.current_program_id();
-				program.add_vshader_from_source(vshader);
-				program.add_fshader_from_source(fshader);
-			}
-			else
-			{
-				program.add_vshader_from_source(vshader);
-				program.add_fshader_from_source(fshader);
-			}
-			program.link();
+			shouldRender = !shouldRender;
 		}
-		//bool renderK1 = false;
-		//bool renderK2 = false;
-		//bool renderPrincipal = false;
-		//void renderCurvature(int i)
-		//{
-		//	switch (i)
-		//	{
-		//	case 0: //don't render any curvature
-		//		renderK1 = renderK2 = renderPrincipal = false;
-		//		break;
-		//	case 1:
-		//		renderK1 = true;
-		//		renderK2 = renderPrincipal = false;
-		//		break;
-		//	case2:
-		//		renderK2 = true;
-		//		renderK1 = renderPrincipal = false;
-		//		break;
-		//	case 3:
-		//		renderPrincipal = true;
-		//		renderK2 = renderK1 = false;
-		//		break;
-
-		//	default:
-		//		break;
-		//	}
-		//}
+	
 		void init(){
+			shouldRender = true;
 			///--- Shader
 			program.add_vshader_from_source(vshader);
 			program.add_fshader_from_source(fshader);
@@ -177,20 +139,24 @@ colour = fColour;
 		Box3 bounding_box(){ return OpenGP::bounding_box(mesh); }
 
 		void display(){
-			program.bind();
-			vao.bind();
+			if (shouldRender)
+			{
+
+				program.bind();
+				vao.bind();
 		
-			Vec3 Colour(0, 1, 0);
-			program.set_attribute("fColour", Colour);
-			glDrawArrays(GL_TRIANGLES, 0, mesh.n_faces() * 3 /*#verts*/);
+				Vec3 Colour(0, 1, 0);
+				program.set_attribute("fColour", Colour);
+				glDrawArrays(GL_TRIANGLES, 0, mesh.n_faces() * 3 /*#verts*/);
 
 
-			//render min features
-			Colour = Vec3(0, 0, 1);
-			program.set_attribute("fColour", Colour);
+				//render min features
+				Colour = Vec3(0, 0, 1);
+				program.set_attribute("fColour", Colour);
 
-			vao.release();
-			program.release();
+				vao.release();
+				program.release();
+			}
 		}
 	};
 

@@ -87,7 +87,7 @@ namespace OpenGP {
 			}
 			Mat3xN P2;
 			
-			P2 = P1 + 0.2*N;
+			P2 = P1 + 0.08*N;
 			
 			load(P1, P2);
 			///--- Data

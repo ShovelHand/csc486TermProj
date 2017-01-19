@@ -10,19 +10,16 @@ FeatureExtractor::FeatureExtractor(SurfaceMesh& mesh) : mesh(mesh)
 	varea = mesh.add_vertex_property<OpenGP::Scalar>("v:area");
 	vpoints = mesh.vertex_property<Point>("v:point");
 	vquality = mesh.vertex_property<float>("v:quality");
-	vcurvature_K = mesh.add_vertex_property<OpenGP::Scalar>("v:curvature_K");
-	vcurvature_H = mesh.add_vertex_property<OpenGP::Scalar>("v:curvature_H");
 	vdirection_kmax = mesh.add_vertex_property<OpenGP::Vec3>("v:direction_kmax");
 	vdirection_kmin = mesh.add_vertex_property<OpenGP::Vec3>("v:direction_kmin");
 	vcurvature_kmax = mesh.add_vertex_property<OpenGP::Scalar>("v:curvature_kmax");
 	vcurvature_kmin = mesh.add_vertex_property<OpenGP::Scalar>("v:curvature_kmin");
-	vcurvature_principal = mesh.add_vertex_property<OpenGP::Scalar>("v:curvature_principal");
 	vShapeOperator = mesh.add_vertex_property<OpenGP::Mat3x3>("v:shape_operator");
 	vextremality = mesh.add_vertex_property<OpenGP::Scalar>("v:extremality");
 	//edge properties
-	ecotan = mesh.add_edge_property<OpenGP::Scalar>("e:cotan");
 	eShapeOperator = mesh.add_edge_property<OpenGP::Mat3x3>("e:shape_operator");
 	hface_norm = mesh.add_halfedge_property<OpenGP::Vec3>("h:face_norm");
+	hTraversed_this_time = mesh.add_halfedge_property<bool>("h:hTraversed_this_time");
 	//face properties
 	fis_regular = mesh.add_face_property<bool>("f:is_regular");
 }
@@ -30,126 +27,96 @@ FeatureExtractor::FeatureExtractor(SurfaceMesh& mesh) : mesh(mesh)
 FeatureExtractor::~FeatureExtractor()
 {
 	mesh.remove_vertex_property(varea);
-	//mesh.remove_vertex_property(ecotan);
-	mesh.remove_vertex_property(vcurvature_K);
-	mesh.remove_vertex_property(vcurvature_H);
 	mesh.remove_vertex_property(vcurvature_kmax);
 	mesh.remove_vertex_property(vcurvature_kmin);
-	mesh.remove_vertex_property(vcurvature_principal);
+
 	//TODO:: remember to remove vertex properties, etc that you've haphazardly added
 	mesh.garbage_collection();
 }
 
-//compute shape operators for every edge on the mesh
-void FeatureExtractor::ComputeShapeOperators()
+//vertex shape operators are an average of edge shape operators, so I 
+//encapsulated that computation here for code readability
+OpenGP::Mat3x3 FeatureExtractor::ComputeEdgeShapeOperators(SurfaceMesh::Vertex_iterator vertex){
+	Mat3x3 vertexShapeOperator;
+	vertexShapeOperator.Zero();
+
+	//assign each halfedge its face's surface norm for calculating dihedral angles
+	SurfaceMesh::Face_around_vertex_circulator fc, fc_end;
+		fc = mesh.faces(*vertex);
+		fc_end = fc;
+
+		do {
+			SurfaceMesh::Halfedge_around_face_circulator hc, hc_end;
+			hc = mesh.halfedges(*fc);
+			hc_end = hc;
+
+			do{
+				hface_norm[*hc] = mesh.compute_face_normal(*fc);
+			} while (++hc != hc_end);
+
+		} while (++fc != fc_end);
+
+	//iterate over each edge from the vertex
+	SurfaceMesh::Vertex v0, v1;
+	SurfaceMesh::Halfedge_around_vertex_circulator hvc, hvc_end;
+	hvc = mesh.halfedges(*vertex);
+	hvc_end = hvc;
+	//std::cout << *vertex << std::endl;
+	hvc = mesh.halfedges(*vertex);
+	hvc_end = hvc;
+	
+	//this is so we can mark halfEdges as traversed so we only compute the shape operator once per edge, not both halfs
+	//But we should make sure they all start as untraversed
+	
+	do{
+		hTraversed_this_time[*hvc] = false;
+	} while (++hvc != hvc_end);
+
+	do
+	{
+		
+		v0 = mesh.from_vertex(*hvc);
+		v1 = mesh.to_vertex(*hvc);
+		SurfaceMesh::Halfedge thisEdge = mesh.find_halfedge(v0, v1);
+		if (!hTraversed_this_time[thisEdge])//only once per edge, not both half-edges
+		{
+			SurfaceMesh::Halfedge reciprocalEdge = mesh.find_halfedge(v1, v0);
+			//because we got the face normal for each halfedge above we should now be able to compute the dihedral angle,
+			//where cos(t) = n[1] dot n[2]
+			float theta = acosf(hface_norm[thisEdge].dot(hface_norm[reciprocalEdge]));
+			//now get mean curvature of edge, where H[e] = 2|e|cos(theta[e]/2)
+			Vec3 e = vpoints[v1] - vpoints[v0];
+			float H = 2.0f * sqrtf(pow(e.x(), 2) + pow(e.y(), 2) + pow(e.z(), 2)) * cosf(theta / 2.0f);
+
+			//and now we can compute the edge's shape operator
+			Mat3x3 edgeShapeOperator = H * (e.normalized().cross(hface_norm[thisEdge]))*(e.normalized().cross(hface_norm[thisEdge])).transpose();
+			//calculate <N[p], N[e]>
+			Vec3 Np = mesh.compute_vertex_normal(*vertex);
+			float innerProduct = Np.x() * hface_norm[thisEdge].x() + Np.y() * hface_norm[thisEdge].y() + Np.z() * hface_norm[thisEdge].z();
+			vertexShapeOperator += innerProduct * edgeShapeOperator;
+			hTraversed_this_time[thisEdge] = true; // hTraversed_this_time[reciprocalEdge] = true;
+			std::cout << *vertex << std::endl;
+		}
+	} while (++hvc != hvc_end);
+
+	return vertexShapeOperator * 0.5f;
+}
+
+
+//compute shape operators for every vertex on the mesh
+void FeatureExtractor::ComputeVertexShapeOperators()
 {
 	std::cout << "computing shape operators..." << std::endl;
-	//give every halfedge the norm of its corresponding face to compute dihedral angles for edge shape operators
-	SurfaceMesh::Halfedge_around_face_circulator hfc, hfc_end;
-	
-	//compute voronoi area for each vertex and norm of each halfedge's corresponding face for dihedral angle calculation later.
-	for (const auto& face : mesh.faces())
-	{
-		SurfaceMesh::Face_property<bool> is_reg = mesh.get_face_property<bool>("f:is_regular");
-		is_reg[face] = true; //this will be used later for seeing if faces are regular or singular. For now we can ignore.
-		//initialize iterators
-		hfc = mesh.halfedges(face);
-		hfc_end = hfc;
-		
-		Scalar a;
-		SurfaceMesh::Vertex v0, v1, v2;
-		// Collect triangle vertices.
-		auto vFit = mesh.vertices(face);
-		v0 = *vFit;
-		++vFit;
-		v1 = *vFit;
-		++vFit;
-		v2 = *vFit;
 
-		// Compute one third area.
-		a = (vpoints[v1] - vpoints[v0]).cross(vpoints[v2] - vpoints[v0]).norm() / 6.0;
-
-		// Distribute area to vertices
-		varea[v0] += a;
-		varea[v1] += a;
-		varea[v2] += a;
-
-		do
-		{
-			hface_norm[*hfc] = mesh.compute_face_normal(face);
-		} while (++hfc != hfc_end);
-	}
-
-	SurfaceMesh::Halfedge_around_vertex_circulator hvc, hvc_end;
-	//now we can get dihedral angle of each edge, and compute edge based shape operators.
+	// loop over all vertices
 	for (const auto& vertex : mesh.vertices())
 	{
-		SurfaceMesh::Vertex v0, v1;
-		//initialize iterators 
-		hvc = mesh.halfedges(vertex);
-		hvc_end = hvc;
-		do
-		{
-			v0 = mesh.from_vertex(*hvc);
-			v1 = mesh.to_vertex(*hvc);
-			SurfaceMesh::Halfedge reciprocalEdge = mesh.find_halfedge(v1, v0);
-			//get face normal associated with both halfedges to compute dihedral angle
-			SurfaceMesh::Halfedge_property<Vec3> faceNorm = mesh.get_halfedge_property<Vec3>("h:face_norm");
-
-			//get dihedral angle theta
-			Vec3 alpha = mesh.position(v0).cross(faceNorm[*hvc]);
-			Vec3 beta = mesh.position(mesh.from_vertex(reciprocalEdge)).cross(faceNorm[reciprocalEdge]);
-			float firstLength = sqrtf(powf(alpha.x(), 2) + powf(alpha.y(), 2) + powf(alpha.z(), 2));
-			float secondLength = sqrtf(powf(beta.x(), 2) + powf(beta.y(), 2) + powf(beta.z(), 2));
-			float theta = acosf(alpha.dot(beta) / (firstLength*secondLength));
-
-			//compute direction of edge e. Orientation not important
-			Vec3 p1 = mesh.position(mesh.from_vertex(*hvc));
-			Vec3 p2 = mesh.position(mesh.to_vertex(*hvc));
-			Vec3 e = (p2 - p1); 
-			//compute mean curvature H_e for edge e
-			float H_e = 2.0f * sqrtf(powf(e.x(), 2) + powf(e.y(), 2) + powf(e.z(), 2)) *(theta / 2.0f);
-			e.normalize();
-			//get N_e, the average of the surface normals on either side of the edge
-			Vec3 N_e = (faceNorm[*hvc] + faceNorm[reciprocalEdge]) / (firstLength + secondLength);
-			//now we can compute the shape operator for the edge
-			Mat3x3 edgeShapeOperator = H_e * (e.cross(N_e))*(e.cross(N_e)).transpose();
-			SurfaceMesh::Edge thisEdge = mesh.find_edge(v0, v1);
-			eShapeOperator[thisEdge] = edgeShapeOperator;
-		} while (++hvc != hvc_end);
+		// initialize circulators
+	//	vc = mesh.vertices(*vit);
+	//	vc_end = vc;
+		vShapeOperator[vertex] = ComputeEdgeShapeOperators(vertex);
 	}
 
-	//now we'll use the edge shape operators to make the vertex shape operators
-	for (const auto& vertex : mesh.vertices())
-	{
-		Mat3x3 vShapeOperator; 
-		vShapeOperator.Zero();
-		Vec3 N_p = mesh.compute_vertex_normal(vertex);
-		SurfaceMesh::Vertex v0, v1;
-		hvc = mesh.halfedges(vertex);
-		hvc_end = hvc;
-
-		do
-		{
-			v0 = mesh.from_vertex(*hvc);
-			v1 = mesh.to_vertex(*hvc);
-			SurfaceMesh::Halfedge reciprocalEdge = mesh.find_halfedge(v1, v0);
-			//get face normal associated with both halfedges to compute dihedral angle
-			SurfaceMesh::Halfedge_property<Vec3> faceNorm = mesh.get_halfedge_property<Vec3>("h:face_norm");
-			//ASK ABOUT EIGEN OPERATORS FOR GETTING VECTOR LENGTH
-			float firstLength = sqrtf(powf(faceNorm[*hvc].x(), 2) + powf(faceNorm[*hvc].y(), 2) + powf(faceNorm[*hvc].z(), 2));
-			float secondLength = sqrtf(powf(faceNorm[reciprocalEdge].x(), 2) + powf(faceNorm[reciprocalEdge].y(), 2) + powf(faceNorm[reciprocalEdge].z(), 2));
-			Vec3 N_e = (faceNorm[*hvc] + faceNorm[reciprocalEdge]) / (firstLength + secondLength);
-			//get edge shape operator for each edge from vertex
-			SurfaceMesh::Edge thisEdge = mesh.find_edge(v0, v1); 
-			SurfaceMesh::Edge_property<Mat3x3> eShapeOperator = mesh.get_edge_property<Mat3x3>("e:shape_operator");
-			vShapeOperator += (N_p.dot(N_e))* eShapeOperator[thisEdge];
-		} while (++hvc != hvc_end);
-
-		vShapeOperator /= 2.0f;
-		SurfaceMesh::Vertex_property<Mat3x3> vShapeOp = mesh.get_vertex_property<Mat3x3>("v:shape_operator");
-		vShapeOp[vertex] = vShapeOperator;
-	}
 	std::cout << "done computing shape operators" << std::endl;
 }
 
@@ -186,16 +153,17 @@ void FeatureExtractor::ComputeMaxMinCurvatures()
 		eigenValVec.first = es.eigenvalues()(2, 0).real(); eigenValVec.second = es.eigenvectors().col(2).real();
 		eigenPairs.push_back(eigenValVec);
 
+		//do a lame bubble sort to get two highest values
 		bool swapped = true;
 		while (swapped)
 		{
-			//do a lame bubble sort to get two highest values
+		
 			for (int i = 0; i < eigenPairs.size() - 1; ++i)
 			{
 				if (abs(eigenPairs[i].first) > abs(eigenPairs[i + 1].first))
 				{//swap
 					std::pair<float, Vec3> swap = eigenPairs[i];
-					eigenPairs[i] = eigenPairs[i+1];
+					eigenPairs[i] = eigenPairs[i + 1];
 					eigenPairs[i + 1] = swap;
 					swapped = true;
 				}
@@ -204,14 +172,16 @@ void FeatureExtractor::ComputeMaxMinCurvatures()
 					swapped = false;
 				}
 			}
+
 		}
 		//now sort these in increasing order so that we can pop last two for our values
 		k_max = eigenPairs.back().first; k_maxDir = eigenPairs.back().second;
 		eigenPairs.pop_back();
 		k_min = eigenPairs.back().first; k_minDir = eigenPairs.back().second;
+		
 		//we'll also scale the curvatures here since "by construction, [they're] integrated quantities" (see paper)
-		vk_min[vertex] = k_min * (3.0f / varea[vertex]);
-		vk_max[vertex] = k_max * (3.0f / varea[vertex]);
+		vk_min[vertex] = k_min *(3.0f / varea[vertex]);
+		vk_max[vertex] = k_max *(3.0f / varea[vertex]);
 		vk_minDir[vertex] = k_minDir.normalized();
 		vk_maxDir[vertex] = k_maxDir.normalized();
 
@@ -227,7 +197,7 @@ void FeatureExtractor::ComputeMaxMinCurvatures()
 void FeatureExtractor::BuildLinearFunctions()
 {
 	//TODO: the following aren't done yet
-	//discard singular triangles (May do this when rest of project is done) *UPDATE they are now marked as single though
+	//discard singular triangles (May do this when rest of project is done) *UPDATE they are now marked as single 
 	std::cout << "building extremality coefficients (e_i) for each vertex" << std::endl;
 	SurfaceMesh::Face_around_vertex_circulator fvc, fvc_end;
 	for (const auto& vertex : mesh.vertices()) //for every vertex...
@@ -279,6 +249,8 @@ void FeatureExtractor::BuildLinearFunctions()
 		} while (++fvc != fvc_end);
 		SurfaceMesh::Vertex_property<Scalar> areaofP = mesh.get_vertex_property<Scalar>("v:area");
 		e *= (1.0f / areaofP[vertex]);
+		SurfaceMesh::Vertex_property<Scalar> e_i = mesh.get_vertex_property<Scalar>("v:extremality");
+		e_i[vertex] = e;
 	}
 	std::cout << "done building extremality coefficients" << std::endl;
 }
@@ -345,7 +317,7 @@ void FeatureExtractor::CorrectCurvatureSigns()
 //now we can compute line segments that the feature lines!
 void FeatureExtractor::ComputeFeatureLines()
 {
-	std::cout << "extracting feature lines. (not implemented yet)" << std::endl;
+	std::cout << "extracting feature lines." << std::endl;
 	int noCrossCount = 0;
 	for (const auto& face : mesh.faces())
 	{
@@ -383,13 +355,76 @@ void FeatureExtractor::ComputeFeatureLines()
 			if (gradE_i.dot((k_iDirV0 + k_iDirV1 + k_iDirV2)) > 0 ||
 				(abs(k_iMax[*v0] + k_iMax[*v1] + k_iMax[*v2]) < abs(k_iMin[*v0] + k_iMin[*v1] + k_iMin[*v2]))) 
 			{
-				std::cout << "no crossing" << std::endl;
+			//	std::cout << "no crossing" << std::endl;
 				noCrossCount += 1;
 				continue;
 			}
 			
+			//otherwise, lets find the point of that zero crossing for two edges on the triangle.
+			//e_i's must be different signs for this to make sense
+			Vec3 p1(-1, -1, -1);
+			Vec3 p2(-1,-1,-1);
+			if ((e_0 < 0 && e_1 > 0) || (e_1 > 0 && e_1 < 0))
+			{
+				if (p1 == Vec3(-1, -1, -1))
+					//p1 = (mesh.position(*v1) + mesh.position(*v0)/2.0f);
+					p1 = ComputeRidgePoint(v1, v0);
+				else
+					p2 = (ComputeRidgePoint(v1, v0));
+			}
+			if ((e_0 < 0 && e_2 > 0) || (e_0 > 0 && e_2 < 0))
+			{
+				if (p1 == Vec3(-1, -1, -1))
+					p1 = ComputeRidgePoint(v2, v0);
+				else
+					p2 = ComputeRidgePoint(v2, v0);
+			}
+			if ((e_1 < 0 && e_2 > 0) || (e_1 > 0 && e_2 < 0))
+			{
+				if (p1 == Vec3(-1, -1, -1))
+					p1 = ComputeRidgePoint(v2, v1);
+				else
+					p2 = ComputeRidgePoint(v2, v1);
+			}
+
+			if (p1 != Vec3(-1, -1, -1) && p2 != Vec3(-1, -1, -1))
+			{
+				ridgeLinePoints.push_back(p1);
+				ridgeLinePoints.push_back(p2);
+			}
+		/*	else
+			{
+				std::cout << "no crossing in this face" << std::endl;
+			}*/
+			
+		/*	for (std::vector<Vec3>::iterator itr = ridgeLinePoints.begin(); itr != ridgeLinePoints.end(); ++itr)
+			{
+				std::cout << (*itr) << "\n\n" << std::endl;
+			}*/
 		} 
 	std::cout << noCrossCount << std::endl;
+}
+
+//this is a hacky and improper way of computing the positions for ridge line segment ends
+//right now it just returns the position of the vertex with the extremality of highest absolute value.
+Vec3 FeatureExtractor::ComputeRidgePoint(SurfaceMesh::Vertex_iterator v1, SurfaceMesh::Vertex_iterator v2)
+{
+	Vec3 dir = mesh.position(*v2) - mesh.position(*v1); dir.normalize(); //normal vector in direction of edge
+	SurfaceMesh::Vertex_property<Scalar> e_i = mesh.get_vertex_property<Scalar>("v:extremality");
+//	Scalar t;
+	Vec3 ret;
+	if (abs(e_i[*v1]) > abs(e_i[*v2]))
+	{
+	//	t = e_i[*v2] / e_i[*v1];
+		ret = mesh.position(*v1);
+	}
+	else if (abs(e_i[*v2]) > abs(e_i[*v1]))
+	{
+//		t = e_i[*v1] / e_i[*v2];
+		ret = mesh.position(*v2);
+	}
+
+	return ret;
 }
 
 //We need to process singular triangles to allow for stable computation of extremalities
@@ -403,42 +438,14 @@ void FeatureExtractor::init()
 {
     // why? because face normals are needed to compute the initial quadrics
     mesh.update_face_normals();
-	mesh.update_vertex_normals();
+	//mesh.update_vertex_normals();
 
 	//get 3X3 tensor matrices for each vertices
-	ComputeShapeOperators();
+	ComputeVertexShapeOperators();
 	//get min and max curvatures from the tensor matrix shape operators
 	ComputeMaxMinCurvatures();
 	BuildLinearFunctions();
 	CorrectCurvatureSigns();
 	ComputeFeatureLines();
-	ProcessSingularTriangles();
-}
-
-void FeatureExtractor::exec()
-{
-
-}
-void FeatureExtractor::create_colours(OpenGP::SurfaceMesh::Vertex_property<OpenGP::Scalar> prop) {
-	using namespace OpenGP;
-
-	// Determine min and max meanCature (remove outliers)
-	// Use relative property value are 1D texture coordinate in range [0, 1].
-	std::vector<Scalar> values;
-	for (const auto& vertex : mesh.vertices()) {
-		values.push_back(prop[vertex]);
-	}
-
-	// Sort array.
-	std::sort(values.begin(), values.end());
-
-	// Discard lower and upper 2%.
-	unsigned int n = values.size() - 1;
-	unsigned int i = n / 50;
-	Scalar minProp = values[i];
-	Scalar maxProp = values[n - 1 - i];
-
-	for (const auto& vertex : mesh.vertices()) {
-		vquality[vertex] = (prop[vertex] - minProp) / (maxProp - minProp);
-	}
+//	ProcessSingularTriangles();
 }

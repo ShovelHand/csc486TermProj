@@ -13,7 +13,7 @@
 namespace OpenGP {
 	//=============================================================================
 
-	class CurveDirRenderMin : public SceneObject{
+	class FeatureRenderer : public SceneObject{
 	private:
 		SurfaceMesh& mesh;
 
@@ -22,21 +22,15 @@ namespace OpenGP {
 		ArrayBuffer<Vec3> _buffer_vpos;   ///< per-vertex position
 		ArrayBuffer<Vec3> _buffer_vcolor; ///< per-vertex color (optional)
 
+		std::vector<Vec3> segmentPoints;
+
 		std::vector<GLuint> minVerticesBuffers;
 		std::vector<VertexArrayObject> maxVerticesBuffers;
 		OpenGP::SurfaceMesh::Vertex_property<OpenGP::Vec3> k_dir;
-		bool bRender;
+		bool bRenderLines;
+		bool bRenderPoints;
 	private:
 
-		void load(const MatMxN &P1, const MatMxN &P2){
-			CHECK(P1.cols() == P2.cols());
-			CHECK((P1.rows() == 3) && (P2.rows() == 3));
-			_data.resize(3, 2 * P1.cols());
-			for (int i = 0; i<P1.cols(); i++){
-				_data.col(i * 2 + 0) = P1.col(i);
-				_data.col(i * 2 + 1) = P2.col(i);
-			}
-		}
 		const GLchar* vshader = R"GLSL( 
         #version 330
         uniform mat4 M;    
@@ -60,35 +54,29 @@ namespace OpenGP {
 
 
 	public:
-		CurveDirRenderMin(SurfaceMesh& mesh ) : mesh(mesh){ }
+		FeatureRenderer(SurfaceMesh& mesh) : mesh(mesh){ }
 
-		void shouldRender(){ bRender = !bRender; }
+		void setSegmentPoints(std::vector<Vec3> vec) { segmentPoints = vec; }
+		void shouldRenderLines(){ bRenderLines = !bRenderLines; }
+		void shouldRenderPoints(){ bRenderPoints = !bRenderPoints; }
 
 		void init(){
-			bRender = true;
+			bRenderLines = true;
+			bRenderPoints = true;
+			if (!segmentPoints.size() > 0)
+			{
+				std::cout << "no ridgeline points given" << std::endl;
+				return;
+			}
+				
+
 			program.add_vshader_from_source(vshader);
 			program.add_fshader_from_source(fshader);
 			program.link();
-			//load point matrices
-			Mat3xN P1 = OpenGP::vertices_matrix(mesh);
-			Mat3xN N = OpenGP::normals_matrix(mesh); //'cause I can't figure out how to set number of rows
+			
 	
-			k_dir = mesh.get_vertex_property<Vec3>("v:direction_kmin");
-
-			int i = 0;
-			for (const auto& vertex : mesh.vertices())
-			{
-				N.row(0).col(i) << k_dir[vertex].x();
-				N.row(1).col(i) << k_dir[vertex].y();
-				N.row(2).col(i) << k_dir[vertex].z();
-				++i;
-			}
-			Mat3xN P2;
-		
-			P2 = P1 + 0.05*N;
-			load(P1, P2);
 			///--- Data
-			_buffer_vpos.upload(_data.data(), _data.cols(), sizeof(Vec3));
+			_buffer_vpos.upload(segmentPoints);
 
 			///--- Data
 			init_data();
@@ -112,20 +100,27 @@ namespace OpenGP {
 
 		void display()
 		{
-			if (bRender)
-			{
-				if (_data.cols() == 0) return;
+			
+				//if (_data.cols() == 0) return;
 				_vao.bind();
 				program.bind();
-				glLineWidth(1.0f);
+				glLineWidth(2.0f);
 
-				Vec3 color(0, 0, 1);
-
+				Vec3 color(1, 0, 1);
 				program.set_attribute("vcolor", color); ///< default use object color
-				glDrawArrays(GL_LINES, 0, _data.cols());
+				if (bRenderLines)
+				{	
+					glDrawArrays(GL_LINES, 0, segmentPoints.size());
+				}
+				if (bRenderPoints)
+				{
+					glPointSize(5.0);
+					glDrawArrays(GL_POINTS, 0, segmentPoints.size());
+
+				}
 				_vao.release();
 				program.release();
-			}
+			
 
 		}
 	};
