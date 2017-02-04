@@ -23,9 +23,8 @@ namespace OpenGP {
 
 		std::vector<GLuint> minVerticesBuffers;
 		std::vector<VertexArrayObject> maxVerticesBuffers;
-		std::vector<Vec3> someVectors;
 
-		bool renderSmooth = false;
+		bool shouldRender;
 
 	private:
 		const GLchar* vshader = R"GLSL(
@@ -71,24 +70,13 @@ colour = fColour;
 	public:
 		MeshRender(SurfaceMesh& mesh) : mesh(mesh){}
 
-		void setSmooth()
+		void setShouldRender()
 		{
-			renderSmooth = !renderSmooth;
-			
-			if (renderSmooth)
-			{
-				program.current_program_id();
-				program.add_vshader_from_source(vshader);
-				program.add_fshader_from_source(fshader);
-			}
-			else
-			{
-				program.add_vshader_from_source(vshader);
-				program.add_fshader_from_source(fshader);
-			}
-			program.link();
+			shouldRender = !shouldRender;
 		}
+	
 		void init(){
+			shouldRender = true;
 			///--- Shader
 			program.add_vshader_from_source(vshader);
 			program.add_fshader_from_source(fshader);
@@ -143,36 +131,32 @@ colour = fColour;
 			normalbuffer.upload(n_tri);
 			barycbuffer.upload(b_tri);
 
-			for (int i = 0; i < 300; i++)
-			{
-				someVectors.push_back(Vec3(i, 0, 0));
-			}
-		
-			
+
+
+
 		}
 
 		Box3 bounding_box(){ return OpenGP::bounding_box(mesh); }
 
 		void display(){
-			program.bind();
-			vao.bind();
-			Vec3 Colour(1, 0, 0);
-			program.set_attribute("fColour", Colour);
-			glDrawArrays(GL_TRIANGLES, 0, mesh.n_faces() * 3 /*#verts*/);
-		
-
-			//render min features
-			Colour = Vec3(0, 0, 1);
-			program.set_attribute("fColour", Colour);
-			for (int i = 0; i < someVectors.size(); ++i)
+			if (shouldRender)
 			{
-			//	glBindBuffer(GL_ARRAY_BUFFER, (minVerticesBuffers[i]));
-				glPointSize(5.0f);
-				glDrawArrays(GL_POINTS, 0, GLsizei(someVectors.size()));
-				glPointSize(1.0f);
+
+				program.bind();
+				vao.bind();
+		
+				Vec3 Colour(0, 1, 0);
+				program.set_attribute("fColour", Colour);
+				glDrawArrays(GL_TRIANGLES, 0, mesh.n_faces() * 3 /*#verts*/);
+
+
+				//render min features
+				Colour = Vec3(0, 0, 1);
+				program.set_attribute("fColour", Colour);
+
+				vao.release();
+				program.release();
 			}
-			vao.release();
-			program.release();
 		}
 	};
 
